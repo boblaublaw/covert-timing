@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 from netfilterqueue import NetfilterQueue
 from time import sleep,time
-import curses
+from sys import exc_info
 import threading
 import subprocess
 from atexit import register
@@ -29,27 +29,23 @@ Destroy the queue."""
 
 nfqueue = NetfilterQueue()
 
-def printscreen(stdscr):
-    while 1:
-        y,x=stdscr.getmaxyx()
-        stdscr.addstr(1, 1, "biggest: " + str(biggest) + ': ' + str(y) + ',' + str(x))
-        stdscr.refresh()
-        sleep(1);
-
 class ConnectionManager():
     """Object to select an active socket connection and divert it to the netfilter queue"""
+
     def __init__(self):
         self.connspec=''
-        self.refresh()
         self.last=None
         self.biggest=None
+        self.refresh()
 
     def refresh(self):
+        """this function will refresh the connect listing."""
         p = subprocess.Popen('netstat -W -n -a -A inet | grep ESTABLISHED', shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         retval=p.wait()
         self.connections=map(lambda line: line.rstrip(), p.stdout.readlines())
         
     def select(self):
+        """This function will prompt the user for a connection.  Once selected, the traffic will be redirected to a NFQUEUE."""
         lineNumber=1
         for line in self.connections:
             print str(lineNumber) + ': ' + line
@@ -67,13 +63,20 @@ class ConnectionManager():
             nfqueue.bind(1, self.print_and_accept)
 
     def cleanup(self):
+        """This will tear down the nfqueue and issue the iptables command to stop interfering with the traffic."""
+        if nfqueue != None:
+            nfqueue.unbind()
         if self.connspec != '':
             p = subprocess.Popen('iptables -D' + self.connspec, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             retval=p.wait()
             self.connspec=''
-        nfqueue.unbind()
+   
+    def __del__(self): 
+        """This destructor just calls the named cleanup function"""
+        self.cleanup()
 
     def print_and_accept(self,pkt):
+        """This is the callback function for nfqueue"""
         now=time()
         if self.last != None:
             delay = now - self.last
@@ -86,25 +89,22 @@ class ConnectionManager():
         pkt.accept()
 
     def mitm(self):
+        """Essentially just a wrapper for nfqueue.run()"""
         nfqueue.run()
-
-def mymain(stdscr):
-    #t=threading.Thread(target=printscreen, name='Print Screen Thread', args=stdscr)
-    #t.start();
-    #nfqueue = NetfilterQueue()
-    #nfqueue.bind(1, print_and_accept)
-    try:
-        nfqueue.run()
-    except KeyboardInterrupt:
-        nfqueue.unbind()
 
 try:
+    # create a connection manager 
     C=ConnectionManager()
+    # we explicitly clean up before destructors get called
     register(C.cleanup)
+    # select a connection
     C.select()
+    # start receiving the INPUT packets for the selected connection
     C.mitm()
-    #curses.wrapper(mymain)
-except():
-    print "foo"
+except KeyboardInterrupt:
+    print "all done."
+except:
+    print "Unexpected error:", exc_info()[0]
+    raise
 
 # vi: set ts=4 sw=4 expandtab: 
