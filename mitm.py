@@ -19,7 +19,7 @@ class ConnectionShim(NetfilterQueue):
         globalconnspecnum += 1
         self.connspecnum = globalconnspecnum
         self.connspec = queuename + ' -d ' + ip + '/32 -p ' + proto + ' --dport ' + port + ' -j NFQUEUE --queue-num ' + str(self.connspecnum)
-        print '\niptables -I ' + str(self.connspec) + '\n'
+        print '\niptables -I ' + self.connspec + '\n'
         p = subprocess.Popen('iptables -I ' + self.connspec, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         retval=p.wait()
         self.bind(self.connspecnum, self.wrapper_func, mode=COPY_META)
