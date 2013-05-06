@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 from netfilterqueuewrapper import NetfilterQueueWrapper
+from coverttime import CovertChannel
 from time import sleep,time
 from sys import exc_info
-from coverttime import CovertChannel
 import subprocess
 
 def netstatSelect():
@@ -36,14 +36,14 @@ def netstatSelect():
 
 try:
     # create an covertchannel object 
-    a=CovertChannel()
+    cc=CovertChannel()
 
     # use the netstatSelect method to select a locally terminated connection
     local, remote = netstatSelect()
 
     # assign the callback Functions
-    local['callback'] = a.measure_jitter
-    remote['callback'] = a.induce_jitter
+    local['callback'] = cc.measure_jitter
+    remote['callback'] = cc.induce_jitter
 
     localShim = NetfilterQueueWrapper(**local)
     remoteShim = NetfilterQueueWrapper(**remote)
