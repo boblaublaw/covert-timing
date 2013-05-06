@@ -54,10 +54,6 @@ class NetfilterQueueWrapper(NetfilterQueue):
             self.connspecnum=None
             super(NetfilterQueueWrapper,self).unbind()
 
-    def __del__(self):
-        """This destructor just calls the named cleanup function"""
-        self.cleanup()
-
 class analyzer():
     def __init__(self):
         self.last=None
