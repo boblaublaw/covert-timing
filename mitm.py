@@ -10,6 +10,7 @@ globalconnspecnum=0
 
 class ConnectionShim(NetfilterQueue):
     def __init__(self, queuename, ip, proto, port):
+        super(ConnectionShim,self).__init__()
         global globalconnspecnum
         self.connspec=''
         self.func=None
@@ -33,13 +34,11 @@ class ConnectionShim(NetfilterQueue):
         
     def cleanup(self):
         """This will tear down the nfqueue and issue the iptables command to stop interfering with the traffic."""
-        global globalconnspecnum
         self.unbind()
         p = subprocess.Popen('iptables -D' + self.connspec, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         retval=p.wait()
         self.connspec=''
         self.connspec=0
-        globalconnspecnum-=1
 
     def __del__(self):
         """This destructor just calls the named cleanup function"""
@@ -77,11 +76,15 @@ class ConnectionManager():
 
         print "remote host is " + rip
         # capture the traffic from the remote host
-        outboundShim=ConnectionShim('INPUT',rip,proto,rport)
+        outboundShim=ConnectionShim('OUTPUT',rip,proto,rport)
 
         # capture the traffic to the remote host
         print "local host is " + lip
         inboundShim=ConnectionShim('INPUT',lip,proto,lport)
+
+        # we explicitly clean up before destructors get called
+        register(inboundShim.cleanup)
+        register(outboundShim.cleanup)
 
         return inboundShim, outboundShim
 
@@ -101,7 +104,7 @@ class analyzer():
             print delay, self.biggest
         self.last=now
     def induce_jitter(self):
-        print "and back again"
+        pass
 
 try:
     # create a connection manager 
@@ -110,27 +113,27 @@ try:
     # select a connection
     inboundShim, outboundShim = CM.select()
 
-    # we explicitly clean up before destructors get called
-    register(inboundShim.cleanup)
-    register(outboundShim.cleanup)
-
-    # create an analyzer object to listen to traffic
+    # create an analyzer object 
     a=analyzer()
+
+    # use the inbound traffic to measure jitter
     inboundShim.assign(a.measure_jitter)
+
+    # use the outbound traffic to induce jitter
     outboundShim.assign(a.induce_jitter)
 
     # launch a thread for each shim
     t1 = threading.Thread(target=inboundShim.mitm, args = ())
     t2 = threading.Thread(target=outboundShim.mitm, args = ())
-    t1.daemon=True
-    t2.daemon=True
+    #t1.daemon=True
+    #t2.daemon=True
     t1.start()
     t2.start()
 
     # this is where interactive input and output would be handled
     while 1:
         sleep(0.1)
-        # stuff happens here
+        # interactive stuff happens here
 
 except KeyboardInterrupt:
     print "all done."
