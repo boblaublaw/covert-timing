@@ -6,34 +6,54 @@ import threading
 import subprocess
 from atexit import register
 
-# packet methods
-dox="""
->>> dir (netfilterqueue.Packet)
-['__class__', '__delattr__', '__doc__', '__format__', '__getattribute__', '__hash__', '__init__', '__new__', '__pyx_vtable__', '__reduce__', '__reduce_ex__', '__repr__', '__setattr__', '__sizeof__', '__str__', '__subclasshook__', 'accept', 'drop', 'get_payload', 'get_payload_len', 'get_timestamp', 'hook', 'hw_protocol', 'id', 'payload', 'set_mark']
->>> dir (netfilterqueue.NetfilterQueue)
-['__class__', '__delattr__', '__doc__', '__format__', '__getattribute__', '__hash__', '__init__', '__new__', '__reduce__', '__reduce_ex__', '__repr__', '__setattr__', '__sizeof__', '__str__', '__subclasshook__', 'bind', 'run', 'unbind']
->>> print (netfilterqueue.NetfilterQueue.__doc__)
-Handle a single numbered queue.
->>> print (netfilterqueue.Packet.__doc__)
-A packet received from QueueHandler.
->>> print (netfilterqueue.Packet.accept.__doc__)
-Accept the packet.
->>> print (netfilterqueue.Packet.drop.__doc__)
-Drop the packet.
->>> print (netfilterqueue.NetfilterQueue.run.__doc__)
-Begin accepting packets.
->>> print (netfilterqueue.NetfilterQueue.bind.__doc__)
-Create and bind to a new queue.
->>> print (netfilterqueue.NetfilterQueue.unbind.__doc__)
-Destroy the queue."""
+globalconnspecnum=0
 
 class ConnectionShim(NetfilterQueue):
+    def __init__(self, queuename, ip, proto, port):
+        global globalconnspecnum
+        self.connspec=''
+        self.func=None
+        self.last=None
+        self.biggest=None
+        globalconnspecnum += 1
+        self.connspecnum = globalconnspecnum
+        self.connspec = queuename + ' -d ' + ip + '/32 -p ' + proto + ' --dport ' + port + ' -j NFQUEUE --queue-num ' + str(self.connspecnum)
+        print '\niptables -I ' + self.connspec + '\n'
+        p = subprocess.Popen('iptables -I ' + self.connspec, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        retval=p.wait()
+        self.bind(self.connspecnum, self.wrapper_func)
+
+    def assign(self, func):
+        self.func=func
+
+    def wrapper_func(self, pkt):
+        if self.func != None:
+            self.func()
+        pkt.accept()
+        
+    def cleanup(self):
+        """This will tear down the nfqueue and issue the iptables command to stop interfering with the traffic."""
+        global globalconnspecnum
+        self.unbind()
+        p = subprocess.Popen('iptables -D' + self.connspec, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        retval=p.wait()
+        self.connspec=''
+        self.connspec=0
+        globalconnspecnum-=1
+
+    def __del__(self):
+        """This destructor just calls the named cleanup function"""
+        self.cleanup()
+
+    def mitm(self):
+        """Essentially just a wrapper for nfqueue.run()"""
+        print 'starting mitm()'
+        self.run()
+
+class ConnectionManager():
     """Object to select an active socket connection and divert it to the netfilter queue"""
 
     def __init__(self):
-        self.connspec=''
-        self.last=None
-        self.biggest=None
         self.refresh()
 
     def refresh(self):
@@ -43,7 +63,7 @@ class ConnectionShim(NetfilterQueue):
         self.connections=map(lambda line: line.rstrip(), p.stdout.readlines())
         
     def select(self):
-        """This function will prompt the user for a connection.  Once selected, the traffic will be redirected to a NFQUEUE."""
+        """This function will prompt the user for a locally terminated connection.  Once selected, the traffic will be redirected to a NFQUEUE."""
         lineNumber=1
         for line in self.connections:
             print str(lineNumber) + ': ' + line
@@ -51,29 +71,26 @@ class ConnectionShim(NetfilterQueue):
         print "Select line number: "
         selectedLine=int(raw_input()) - 1
         #tcp        0      0 172.16.65.148:ssh       172.16.65.1:53698       ESTABLISHED
-        proto, ignore1, ignore2, src, dst, ignore3 = self.connections[selectedLine].split()
-        sip,sport = src.split(':')
-        dip,dport = dst.split(':')
-        if self.connspec == '':
-            self.connspec = 'INPUT -d ' + sip + '/32 -p ' + proto + ' --dport ' + sport + ' -j NFQUEUE --queue-num 1'
-            p = subprocess.Popen('iptables -I' + self.connspec, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-            retval=p.wait()
-            self.bind(1, self.print_and_accept)
+        proto, ignore1, ignore2, dst, src, ignore3 = self.connections[selectedLine].split()
+        rip,rport = src.split(':')
+        lip,lport = dst.split(':')
 
-    def cleanup(self):
-        """This will tear down the nfqueue and issue the iptables command to stop interfering with the traffic."""
-        self.unbind()
-        if self.connspec != '':
-            p = subprocess.Popen('iptables -D' + self.connspec, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-            retval=p.wait()
-            self.connspec=''
-   
-    def __del__(self): 
-        """This destructor just calls the named cleanup function"""
-        self.cleanup()
+        print "remote host is " + rip
+        # capture the traffic from the remote host
+        outboundShim=ConnectionShim('INPUT',rip,proto,rport)
 
-    def print_and_accept(self,pkt):
-        """This is the callback function for nfqueue"""
+        # capture the traffic to the remote host
+        print "local host is " + lip
+        inboundShim=ConnectionShim('INPUT',lip,proto,lport)
+
+        return inboundShim, outboundShim
+
+class analyzer():
+    def __init__(self):
+        self.last=None
+        self.biggest=None
+        print 'starting up'
+    def measure_jitter(self):
         now=time()
         if self.last != None:
             delay = now - self.last
@@ -81,23 +98,40 @@ class ConnectionShim(NetfilterQueue):
                 self.biggest=delay
             elif self.biggest < delay:
                 self.biggest=delay
+            print delay, self.biggest
         self.last=now
-        print pkt, delay, self.biggest
-        pkt.accept()
-
-    def mitm(self):
-        """Essentially just a wrapper for nfqueue.run()"""
-        self.run()
+    def induce_jitter(self):
+        print "and back again"
 
 try:
     # create a connection manager 
-    CS=ConnectionShim()
-    # we explicitly clean up before destructors get called
-    register(CS.cleanup)
+    CM=ConnectionManager()
+
     # select a connection
-    CS.select()
-    # start receiving the INPUT packets for the selected connection
-    CS.mitm()
+    inboundShim, outboundShim = CM.select()
+
+    # we explicitly clean up before destructors get called
+    register(inboundShim.cleanup)
+    register(outboundShim.cleanup)
+
+    # create an analyzer object to listen to traffic
+    a=analyzer()
+    inboundShim.assign(a.measure_jitter)
+    outboundShim.assign(a.induce_jitter)
+
+    # launch a thread for each shim
+    t1 = threading.Thread(target=inboundShim.mitm, args = ())
+    t2 = threading.Thread(target=outboundShim.mitm, args = ())
+    t1.daemon=True
+    t2.daemon=True
+    t1.start()
+    t2.start()
+
+    # this is where interactive input and output would be handled
+    while 1:
+        sleep(0.1)
+        # stuff happens here
+
 except KeyboardInterrupt:
     print "all done."
 except:
