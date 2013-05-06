@@ -8,11 +8,11 @@ from atexit import register
 
 globalconnspecnum=0
 
-class ConnectionShim(NetfilterQueue):
-    """ConnectionShim is an object used to set up and tear down NFQUEUE iptables rules.  This is a superclass to NetfilterQueue so function hooks."""
+class NetfilterQueueWrapper(NetfilterQueue):
+    """NetfilterQueueWrapper is an object used to set up and tear down NFQUEUE iptables rules."""
 
     def __init__(self, table='INPUT', ip='127.0.0.1', proto='tcp', port='6667', callback=None):
-        super(ConnectionShim,self).__init__()
+        super(NetfilterQueueWrapper,self).__init__()
         global globalconnspecnum
         self.connspec=''
         globalconnspecnum += 1
@@ -32,6 +32,13 @@ class ConnectionShim(NetfilterQueue):
         # we explicitly clean up before destructors get called
         register(self.cleanup)
 
+        # launch a thread to listen for the callback method
+        t = threading.Thread(target=self.run, args = ())
+
+        # we have no way to stop these threads once they are launched, so we mark them as daemons
+        t.daemon=True
+        t.start()
+
     def wrapper_func(self, pkt):
         """This function ensures that we dont forget to accept the intercepted packet."""
         if self.callback != None:
@@ -45,7 +52,7 @@ class ConnectionShim(NetfilterQueue):
             retval=p.wait()
             self.connspec=''
             self.connspecnum=None
-            super(ConnectionShim,self).unbind()
+            super(NetfilterQueueWrapper,self).unbind()
 
     def __del__(self):
         """This destructor just calls the named cleanup function"""
@@ -87,18 +94,6 @@ class ConnectionManager():
         local= { 'table':'INPUT',  'ip':lip, 'proto':proto, 'port':lport }
         return local, remote
 
-    def setHook(self, cfg):
-        """This function spawns a thread to service callback requests."""
-        # create a Shim object
-        packetShim = ConnectionShim(cfg['table'], cfg['ip'], cfg['proto'], cfg['port'], cfg['callback'])
-
-        # launch a thread for each shim
-        t = threading.Thread(target=packetShim.run, args = ())
-
-        # we have no way to stop these threads once they are launched, so we mark them as daemons
-        t.daemon=True
-        t.start()
-        return 
 
 class analyzer():
     def __init__(self):
@@ -133,8 +128,8 @@ try:
     local['callback'] = a.measure_jitter
     remote['callback'] = a.induce_jitter
 
-    CM.setHook(local)
-    CM.setHook(remote)
+    localShim = NetfilterQueueWrapper(local['table'], local['ip'], local['proto'], local['port'], local['callback'])
+    remoteShim = NetfilterQueueWrapper(remote['table'], remote['ip'], remote['proto'], remote['port'], remote['callback'])
 
     # this is where interactive input and output would be handled
     while 1:
