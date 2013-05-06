@@ -9,29 +9,35 @@ from atexit import register
 globalconnspecnum=0
 
 class ConnectionShim(NetfilterQueue):
-    def __init__(self, queuename, ip, proto, port):
+    """ConnectionShim is an object used to set up and tear down NFQUEUE iptables rules.  This is a superclass to NetfilterQueue so function hooks."""
+
+    def __init__(self, table='INPUT', ip='127.0.0.1', proto='tcp', port='6667', callback=None):
         super(ConnectionShim,self).__init__()
         global globalconnspecnum
         self.connspec=''
-        self.func=None
-        self.last=None
-        self.biggest=None
         globalconnspecnum += 1
         self.connspecnum = globalconnspecnum
-        self.connspec = queuename + ' -d ' + ip + '/32 -p ' + proto + ' --dport ' + port + ' -j NFQUEUE --queue-num ' + str(self.connspecnum)
-        print '\niptables -I ' + self.connspec + '\n'
+        self.callback=callback
+
+        # create the rule specification
+        self.connspec = table + ' -d ' + ip + '/32 -p ' + proto + ' --dport ' + port + ' -j NFQUEUE --queue-num ' + str(self.connspecnum)
+
+        # run the appropriate iptables command and make sure it finishes
         p = subprocess.Popen('iptables -I ' + self.connspec, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         retval=p.wait()
+
+        # associate the NFQUEUE number with the wrapper function 
         self.bind(self.connspecnum, self.wrapper_func, mode=COPY_META)
 
-    def assign(self, func):
-        self.func=func
+        # we explicitly clean up before destructors get called
+        register(self.cleanup)
 
     def wrapper_func(self, pkt):
-        if self.func != None:
-            self.func()
+        """This function ensures that we dont forget to accept the intercepted packet."""
+        if self.callback != None:
+            self.callback()
         pkt.accept()
-        
+
     def cleanup(self):
         """This will tear down the nfqueue and issue the iptables command to stop interfering with the traffic."""
         if self.connspecnum != None:
@@ -47,7 +53,6 @@ class ConnectionShim(NetfilterQueue):
 
 class ConnectionManager():
     """Object to select an active socket connection and divert it to the netfilter queue"""
-
     def __init__(self):
         self.refresh()
 
@@ -57,32 +62,43 @@ class ConnectionManager():
         retval=p.wait()
         self.connections=map(lambda line: line.rstrip(), p.stdout.readlines())
         
-    def select(self):
-        """This function will prompt the user for a locally terminated connection.  Once selected, the traffic will be redirected to a NFQUEUE."""
+    def netstatSelect(self):
+        """This function will prompt the user for a locally terminated connection using netstat."""
+        if len(self.connections) == 0:
+            print 'No active connections detected.'
+            return
+
+        # show the netstat output as numbered lines
         lineNumber=1
         for line in self.connections:
             print str(lineNumber) + ': ' + line
             lineNumber+=1
+
         print "Select line number: "
         selectedLine=int(raw_input()) - 1
+
         #tcp        0      0 172.16.65.148:ssh       172.16.65.1:53698       ESTABLISHED
         proto, ignore1, ignore2, dst, src, ignore3 = self.connections[selectedLine].split()
         rip,rport = src.split(':')
         lip,lport = dst.split(':')
 
-        print "remote host is " + rip
-        # capture the traffic from the remote host
-        outboundShim=ConnectionShim('OUTPUT',rip,proto,rport)
+        # create two dictionaries and return them
+        remote={ 'table':'OUTPUT', 'ip':rip, 'proto':proto, 'port':rport }
+        local= { 'table':'INPUT',  'ip':lip, 'proto':proto, 'port':lport }
+        return local, remote
 
-        # capture the traffic to the remote host
-        print "local host is " + lip
-        inboundShim=ConnectionShim('INPUT',lip,proto,lport)
+    def setHook(self, cfg):
+        """This function spawns a thread to service callback requests."""
+        # create a Shim object
+        packetShim = ConnectionShim(cfg['table'], cfg['ip'], cfg['proto'], cfg['port'], cfg['callback'])
 
-        # we explicitly clean up before destructors get called
-        register(inboundShim.cleanup)
-        register(outboundShim.cleanup)
+        # launch a thread for each shim
+        t = threading.Thread(target=packetShim.run, args = ())
 
-        return inboundShim, outboundShim
+        # we have no way to stop these threads once they are launched, so we mark them as daemons
+        t.daemon=True
+        t.start()
+        return 
 
 class analyzer():
     def __init__(self):
@@ -107,25 +123,18 @@ try:
     # create a connection manager 
     CM=ConnectionManager()
 
-    # select a connection
-    inboundShim, outboundShim = CM.select()
-
     # create an analyzer object 
     a=analyzer()
 
-    # use the inbound traffic to measure jitter
-    inboundShim.assign(a.measure_jitter)
+    # use the netstatSelect method to select a locally terminated connection
+    local, remote = CM.netstatSelect()
 
-    # use the outbound traffic to induce jitter
-    outboundShim.assign(a.induce_jitter)
+    # assign the callback Functions
+    local['callback'] = a.measure_jitter
+    remote['callback'] = a.induce_jitter
 
-    # launch a thread for each shim
-    t1 = threading.Thread(target=inboundShim.run, args = ())
-    t2 = threading.Thread(target=outboundShim.run, args = ())
-    t1.daemon=True
-    t2.daemon=True
-    t1.start()
-    t2.start()
+    CM.setHook(local)
+    CM.setHook(remote)
 
     # this is where interactive input and output would be handled
     while 1:
