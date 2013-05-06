@@ -117,8 +117,8 @@ try:
     local['callback'] = a.measure_jitter
     remote['callback'] = a.induce_jitter
 
-    localShim = NetfilterQueueWrapper(local['table'], local['ip'], local['proto'], local['port'], local['callback'])
-    remoteShim = NetfilterQueueWrapper(remote['table'], remote['ip'], remote['proto'], remote['port'], remote['callback'])
+    localShim = NetfilterQueueWrapper(**local)
+    remoteShim = NetfilterQueueWrapper(**remote)
 
     # this is where interactive input and output would be handled
     while 1:
@@ -127,8 +127,5 @@ try:
 
 except KeyboardInterrupt:
     print "all done."
-except:
-    print "Unexpected error:", exc_info()[0]
-    raise
 
 # vi: set ts=4 sw=4 expandtab: 
