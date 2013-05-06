@@ -140,10 +140,9 @@ try:
         # interactive stuff happens here
 
 except KeyboardInterrupt:
-    inboundShim.cleanup()
-    outboundShim.cleanup()
+#    inboundShim.cleanup()
+#    outboundShim.cleanup()
     print "all done."
-    raise
 except:
     print "Unexpected error:", exc_info()[0]
     raise
