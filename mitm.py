@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from netfilterqueue import NetfilterQueue
+from netfilterqueue import NetfilterQueue, COPY_META
 from time import sleep,time
 from sys import exc_info
 import threading
@@ -19,10 +19,10 @@ class ConnectionShim(NetfilterQueue):
         globalconnspecnum += 1
         self.connspecnum = globalconnspecnum
         self.connspec = queuename + ' -d ' + ip + '/32 -p ' + proto + ' --dport ' + port + ' -j NFQUEUE --queue-num ' + str(self.connspecnum)
-        print '\niptables -I ' + self.connspec + '\n'
+        print '\niptables -I ' + str(self.connspec) + '\n'
         p = subprocess.Popen('iptables -I ' + self.connspec, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         retval=p.wait()
-        self.bind(self.connspecnum, self.wrapper_func)
+        self.bind(self.connspecnum, self.wrapper_func, mode=COPY_META)
 
     def assign(self, func):
         self.func=func
@@ -34,11 +34,12 @@ class ConnectionShim(NetfilterQueue):
         
     def cleanup(self):
         """This will tear down the nfqueue and issue the iptables command to stop interfering with the traffic."""
-        self.unbind()
-        p = subprocess.Popen('iptables -D' + self.connspec, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        retval=p.wait()
-        self.connspec=''
-        self.connspec=0
+        if self.connspecnum != None:
+            p = subprocess.Popen('iptables -D' + self.connspec, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            retval=p.wait()
+            self.connspec=''
+            self.connspecnum=None
+            super(ConnectionShim,self).unbind()
 
     def __del__(self):
         """This destructor just calls the named cleanup function"""
@@ -47,7 +48,10 @@ class ConnectionShim(NetfilterQueue):
     def mitm(self):
         """Essentially just a wrapper for nfqueue.run()"""
         print 'starting mitm()'
-        self.run()
+        try:
+            self.run()
+        except KeyboardInterrupt:
+            pass
 
 class ConnectionManager():
     """Object to select an active socket connection and divert it to the netfilter queue"""
@@ -106,12 +110,12 @@ class analyzer():
     def induce_jitter(self):
         pass
 
-try:
-    # create a connection manager 
-    CM=ConnectionManager()
+# create a connection manager 
+CM=ConnectionManager()
 
-    # select a connection
-    inboundShim, outboundShim = CM.select()
+# select a connection
+inboundShim, outboundShim = CM.select()
+try:
 
     # create an analyzer object 
     a=analyzer()
@@ -125,8 +129,8 @@ try:
     # launch a thread for each shim
     t1 = threading.Thread(target=inboundShim.mitm, args = ())
     t2 = threading.Thread(target=outboundShim.mitm, args = ())
-    #t1.daemon=True
-    #t2.daemon=True
+    t1.daemon=True
+    t2.daemon=True
     t1.start()
     t2.start()
 
@@ -136,7 +140,10 @@ try:
         # interactive stuff happens here
 
 except KeyboardInterrupt:
+    inboundShim.cleanup()
+    outboundShim.cleanup()
     print "all done."
+    raise
 except:
     print "Unexpected error:", exc_info()[0]
     raise
