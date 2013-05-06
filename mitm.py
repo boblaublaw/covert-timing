@@ -45,14 +45,6 @@ class ConnectionShim(NetfilterQueue):
         """This destructor just calls the named cleanup function"""
         self.cleanup()
 
-    def mitm(self):
-        """Essentially just a wrapper for nfqueue.run()"""
-        print 'starting mitm()'
-        try:
-            self.run()
-        except KeyboardInterrupt:
-            pass
-
 class ConnectionManager():
     """Object to select an active socket connection and divert it to the netfilter queue"""
 
@@ -60,7 +52,7 @@ class ConnectionManager():
         self.refresh()
 
     def refresh(self):
-        """this function will refresh the connect listing."""
+        """this function will freshen the connect listing."""
         p = subprocess.Popen('netstat -W -n -a -A inet | grep ESTABLISHED', shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         retval=p.wait()
         self.connections=map(lambda line: line.rstrip(), p.stdout.readlines())
@@ -98,6 +90,7 @@ class analyzer():
         self.biggest=None
         print 'starting up'
     def measure_jitter(self):
+        """this function measures the time that has elapsed since the last time it was called"""
         now=time()
         if self.last != None:
             delay = now - self.last
@@ -110,12 +103,12 @@ class analyzer():
     def induce_jitter(self):
         pass
 
-# create a connection manager 
-CM=ConnectionManager()
-
-# select a connection
-inboundShim, outboundShim = CM.select()
 try:
+    # create a connection manager 
+    CM=ConnectionManager()
+
+    # select a connection
+    inboundShim, outboundShim = CM.select()
 
     # create an analyzer object 
     a=analyzer()
@@ -127,8 +120,8 @@ try:
     outboundShim.assign(a.induce_jitter)
 
     # launch a thread for each shim
-    t1 = threading.Thread(target=inboundShim.mitm, args = ())
-    t2 = threading.Thread(target=outboundShim.mitm, args = ())
+    t1 = threading.Thread(target=inboundShim.run, args = ())
+    t2 = threading.Thread(target=outboundShim.run, args = ())
     t1.daemon=True
     t2.daemon=True
     t1.start()
@@ -140,8 +133,6 @@ try:
         # interactive stuff happens here
 
 except KeyboardInterrupt:
-#    inboundShim.cleanup()
-#    outboundShim.cleanup()
     print "all done."
 except:
     print "Unexpected error:", exc_info()[0]
