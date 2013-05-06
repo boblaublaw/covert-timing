@@ -27,9 +27,7 @@ Create and bind to a new queue.
 >>> print (netfilterqueue.NetfilterQueue.unbind.__doc__)
 Destroy the queue."""
 
-nfqueue = NetfilterQueue()
-
-class ConnectionManager():
+class ConnectionShim(NetfilterQueue):
     """Object to select an active socket connection and divert it to the netfilter queue"""
 
     def __init__(self):
@@ -60,12 +58,11 @@ class ConnectionManager():
             self.connspec = 'INPUT -d ' + sip + '/32 -p ' + proto + ' --dport ' + sport + ' -j NFQUEUE --queue-num 1'
             p = subprocess.Popen('iptables -I' + self.connspec, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             retval=p.wait()
-            nfqueue.bind(1, self.print_and_accept)
+            self.bind(1, self.print_and_accept)
 
     def cleanup(self):
         """This will tear down the nfqueue and issue the iptables command to stop interfering with the traffic."""
-        if nfqueue != None:
-            nfqueue.unbind()
+        self.unbind()
         if self.connspec != '':
             p = subprocess.Popen('iptables -D' + self.connspec, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             retval=p.wait()
@@ -90,17 +87,17 @@ class ConnectionManager():
 
     def mitm(self):
         """Essentially just a wrapper for nfqueue.run()"""
-        nfqueue.run()
+        self.run()
 
 try:
     # create a connection manager 
-    C=ConnectionManager()
+    CS=ConnectionShim()
     # we explicitly clean up before destructors get called
-    register(C.cleanup)
+    register(CS.cleanup)
     # select a connection
-    C.select()
+    CS.select()
     # start receiving the INPUT packets for the selected connection
-    C.mitm()
+    CS.mitm()
 except KeyboardInterrupt:
     print "all done."
 except:
