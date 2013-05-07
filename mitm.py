@@ -3,26 +3,29 @@ from netfilterqueuewrapper import NetfilterQueueWrapper
 from coverttime import CovertChannel
 from time import sleep,time
 from sys import exc_info
-import subprocess
+import subprocess, curses
 
-def netstatSelect():
+def netstatSelect(stdscr):
     """This function will prompt the user for a locally terminated connection using netstat."""
     p = subprocess.Popen('netstat -W -n -a -A inet | grep ESTABLISHED', shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     retval=p.wait()
     connections=map(lambda line: line.rstrip(), p.stdout.readlines())
 
     if len(connections) == 0:
-        print 'No active connections detected.'
+        stdscr.addstr('No active connections detected.\n')
         return
 
     # show the netstat output as numbered lines
     lineNumber=1
     for line in connections:
-        print str(lineNumber) + ': ' + line
+        stdscr.addstr(str(lineNumber) + ':' + line + '\n')
         lineNumber+=1
 
-    print "Select line number: "
-    selectedLine=int(raw_input()) - 1
+    stdscr.addstr("Select line number: ")
+    x=stdscr.getstr()
+    stdscr.addstr(x)
+    selectedLine=int(x) - 1
+    stdscr.addstr("\nSelected line = " + str(selectedLine) + '\n')
 
     #tcp        0      0 172.16.65.148:ssh       172.16.65.1:53698       ESTABLISHED
     proto, ignore1, ignore2, dst, src, ignore3 = connections[selectedLine].split()
@@ -34,12 +37,14 @@ def netstatSelect():
     local= { 'table':'INPUT',  'ip':lip, 'proto':proto, 'port':lport }
     return local, remote
 
-try:
+def main(stdscr):
     # create an covertchannel object 
     cc=CovertChannel()
 
     # use the netstatSelect method to select a locally terminated connection
-    local, remote = netstatSelect()
+    # in the future this could be extended/modified to support FORWARD
+    # packets for traffic passing through this host.
+    local, remote = netstatSelect(stdscr)
 
     # assign the callback Functions
     local['callback'] = cc.measure_jitter
@@ -51,9 +56,18 @@ try:
     # this is where interactive input and output would be handled
     while 1:
         sleep(0.1)
+        stdscr.refresh()
+        while cc.delays.empty() == False:
+            delay=cc.delays.get()
+            delaystr=str(delay)
+            stdscr.addstr(delaystr + '\n')
         # interactive stuff happens here
 
-except KeyboardInterrupt:
-    print "all done."
+if __name__ == '__main__':
+    try:
+        curses.wrapper(main)
+    except KeyboardInterrupt:
+        print "all done."
+
 
 # vi: set ts=4 sw=4 expandtab: 
