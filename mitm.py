@@ -48,21 +48,37 @@ def main(stdscr):
     local, remote = netstatSelect(stdscr)
 
     # assign the callback Functions
-    local['callback'] = cc.measure_jitter
+    local['callback'] = cc.record_packet
     remote['callback'] = cc.induce_jitter
 
     localShim = NetfilterQueueWrapper(**local)
     remoteShim = NetfilterQueueWrapper(**remote)
 
     # this is where interactive input and output would be handled
-    while 1:
+
+    #wait until we see some packets
+    while 0 == len(cc.packettimes):
         sleep(0.1)
+
+    # now we have some packets, but how many?
+    lastnumpackets=len(cc.packettimes)
+    stdscr.addstr(str(lastnumpackets) + '\n')
+    sleep(3)
+    stdscr.refresh()
+
+    while True:
+        sleep(1.0)
+        numpackets = len(cc.packettimes)
+        if lastnumpackets == numpackets:
+            continue
+        stdscr.clear()
+        y, x = stdscr.getmaxyx()
+        lines=min(y,numpackets) 
+        while lines > 1:
+            stdscr.addstr( str(cc.packettimes.pop()) + '\n')
+            lines = lines - 1
         stdscr.refresh()
-        while cc.delays.empty() == False:
-            delay=cc.delays.get()
-            delaystr=str(delay)
-            stdscr.addstr(delaystr + '\n')
-        # interactive stuff happens here
+        lastnumpackets=numpackets
 
 if __name__ == '__main__':
     try:
