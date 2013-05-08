@@ -1,7 +1,8 @@
 covert-timing
 =============
 
-    This is a python project to enable hidden communication (covert channel) over a network socket (cover channel) using only timing modulation of the network traffic.
+    This is a python project to enable hidden communication (covert channel) over a 
+    network socket (cover channel) using only timing modulation of the network traffic.
 
     See also:
         http://en.wikipedia.org/wiki/Covert_channel
