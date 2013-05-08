@@ -11,14 +11,14 @@ covert-timing
 
 Dependencies
 =============
-python 2.7.3
-[NetfilterQueue](https://pypi.python.org/pypi/NetfilterQueue)
-[bitarray](https://pypi.python.org/pypi/bitarray/)
+    - python 2.7.3
+    - [NetfilterQueue](https://pypi.python.org/pypi/NetfilterQueue)
+    - [bitarray](https://pypi.python.org/pypi/bitarray/)
 
 TODO
 =============
-[ ] Everything.
-[ ] Once I am further along I may use the "issues" tracker for features and bug tracking.
-[ ] investigate pygame for rendering latency charts
+    - [ ] Everything.
+    - [ ] Once I am further along I may use the "issues" tracker for features and bug tracking.
+    - [ ] investigate pygame for rendering latency charts
     
 
