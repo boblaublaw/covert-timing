@@ -5,27 +5,28 @@ from time import sleep,time
 from sys import exc_info
 import subprocess, curses
 
-def netstatSelect(stdscr):
-    """This function will prompt the user for a locally terminated connection using netstat."""
-    p = subprocess.Popen('netstat -W -n -a -A inet | grep ESTABLISHED', shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+def netstatSelect(window):
+    """This function will prompt the user for a locally terminated connection using 
+    netstat."""
+    netstatCmd = 'netstat -W -n -a -A inet | grep ESTABLISHED'
+    p = subprocess.Popen(netstatCmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     retval=p.wait()
     connections=map(lambda line: line.rstrip(), p.stdout.readlines())
 
     if len(connections) == 0:
-        stdscr.addstr('No active connections detected.\n')
-        return
+        raise Exception('Netstat shows no ESTABLISHED connections.')
 
     # show the netstat output as numbered lines
     lineNumber=1
     for line in connections:
-        stdscr.addstr(str(lineNumber) + ':' + line + '\n')
+        window.addstr(str(lineNumber) + ':' + line + '\n')
         lineNumber+=1
 
-    stdscr.addstr("Select line number: ")
-    x=stdscr.getstr()
-    stdscr.addstr(x)
+    window.addstr("Select line number: ")
+    x=window.getstr()
+    window.addstr(x)
     selectedLine=int(x) - 1
-    stdscr.addstr("\nSelected line = " + str(selectedLine) + '\n')
+    window.addstr("\nSelected line = " + str(selectedLine) + '\n')
 
     #tcp        0      0 172.16.65.148:ssh       172.16.65.1:53698       ESTABLISHED
     proto, ignore1, ignore2, dst, src, ignore3 = connections[selectedLine].split()

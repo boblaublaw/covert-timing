@@ -18,10 +18,12 @@ class NetfilterQueueWrapper(NetfilterQueue):
         self.callback=callback
 
         # create the rule specification
-        self.connspec = table + ' -d ' + ip + '/32 -p ' + proto + ' --dport ' + port + ' -j NFQUEUE --queue-num ' + str(self.connspecnum)
+        self.connspec = table + ' -d ' + ip + '/32 -p ' + proto + ' --dport ' + port 
+        self.connspec = self.connspec + ' -j NFQUEUE --queue-num ' + str(self.connspecnum)
 
         # run the appropriate iptables command and make sure it finishes
-        p = subprocess.Popen('iptables -I ' + self.connspec, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        cmd = 'iptables -I ' + self.connspec
+        p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         retval=p.wait()
 
         # associate the NFQUEUE number with the wrapper function 
@@ -44,9 +46,11 @@ class NetfilterQueueWrapper(NetfilterQueue):
         pkt.accept()
 
     def cleanup(self):
-        """This will tear down the nfqueue and issue the iptables command to stop interfering with the traffic."""
+        """This will tear down the nfqueue and issue the iptables command to stop interfering 
+        with the traffic."""
         if self.connspecnum != None:
-            p = subprocess.Popen('iptables -D' + self.connspec, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            cmd = 'iptables -D' + self.connspec
+            p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             retval=p.wait()
             self.connspec=''
             self.connspecnum=None
