@@ -56,29 +56,21 @@ def main(stdscr):
 
     # this is where interactive input and output would be handled
 
-    #wait until we see some packets
-    while 0 == len(cc.packettimes):
-        sleep(0.1)
-
-    # now we have some packets, but how many?
-    lastnumpackets=len(cc.packettimes)
-    stdscr.addstr(str(lastnumpackets) + '\n')
-    sleep(3)
-    stdscr.refresh()
-
+    lastNumDelays = 0 
     while True:
-        sleep(1.0)
-        numpackets = len(cc.packettimes)
-        if lastnumpackets == numpackets:
+        sleep(0.1)
+        cc.calculate_delays()
+        numDelays = len(cc.delays)
+        if numDelays == lastNumDelays:
             continue
         stdscr.clear()
         y, x = stdscr.getmaxyx()
-        lines=min(y,numpackets) 
-        while lines > 1:
-            stdscr.addstr( str(cc.packettimes.pop()) + '\n')
-            lines = lines - 1
+        lines=min(y,numDelays) 
+        stats=list(cc.delays)[-lines:]
+        while len(stats) > 1:
+            stdscr.addstr( str(stats.pop(0)) + '\n')
         stdscr.refresh()
-        lastnumpackets=numpackets
+        lastNumDelays=numDelays
 
 if __name__ == '__main__':
     try:
