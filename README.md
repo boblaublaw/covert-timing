@@ -16,8 +16,8 @@ python 2.7.3
 
 TODO
 =============
-- [ ] Everything.  
-- [ ] Once I am further along I may use the "issues" tracker for features and bug tracking.  
-- [ ] investigate pygame for rendering latency charts  
+[ ] Everything.  
+[ ] Once I am further along I may use the "issues" tracker for features and bug tracking.  
+[ ] investigate pygame for rendering latency charts  
     
 
