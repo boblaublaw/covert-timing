@@ -58,7 +58,7 @@ def main(stdscr):
 
     lastNumDelays = 0 
     while True:
-        sleep(0.1)
+        sleep(0.0001)
         cc.calculate_delays()
         numDelays = len(cc.delays)
         if numDelays == lastNumDelays:
@@ -68,7 +68,8 @@ def main(stdscr):
         lines=min(y,numDelays) 
         stats=list(cc.delays)[-lines:]
         while len(stats) > 1:
-            stdscr.addstr( str(stats.pop(0)) + '\n')
+            datum = stats.pop(0)
+            stdscr.addstr( 'packet ' + str(datum[0]) + ' at ' + str(datum[1]) + ' ' + ("%05f" % datum[2] ) + '\n')
         stdscr.refresh()
         lastNumDelays=numDelays
 
