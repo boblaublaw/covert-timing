@@ -57,6 +57,7 @@ def main(stdscr):
     # this is where interactive input and output would be handled
 
     lastNumDelays = 0 
+    delay=list()
     while True:
         sleep(0.0001)
         cc.calculate_delays()
@@ -67,9 +68,21 @@ def main(stdscr):
         y, x = stdscr.getmaxyx()
         lines=min(y,numDelays) 
         stats=list(cc.delays)[-lines:]
+
+        while (len(delay)):
+            delay.pop(0)
+        for stat in stats:
+            delay.append(stat[2])
+  
+        mindelay=min(delay)
+        maxdelay=max(delay)
+        
         while len(stats) > 1:
             datum = stats.pop(0)
-            stdscr.addstr( 'packet ' + str(datum[0]) + ' at ' + str(datum[1]) + ' ' + ("%05f" % datum[2] ) + '\n')
+            stdscr.addstr( 'packet:' + ("%04d" % datum[0]) + ' at:' + ("%0.8f" % datum[1]))
+            stdscr.addstr( ' delay:' + ("%08f" % datum[2]) )
+            percent = 100.0 * (datum[2] - mindelay) / (maxdelay - mindelay)
+            stdscr.addstr(' %:' + ("%3.2f" % percent) + '\n')
         stdscr.refresh()
         lastNumDelays=numDelays
 
