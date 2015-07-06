@@ -34,8 +34,8 @@ def netstatSelect(window):
     lip,lport = dst.split(':')
 
     # create two dictionaries and return them
-    remote={ 'table':'OUTPUT', 'ip':rip, 'proto':proto, 'port':rport }
-    local= { 'table':'INPUT',  'ip':lip, 'proto':proto, 'port':lport }
+    remote={ 'table':'OUTPUT', 'proto':proto, 'dip':rip, 'dport':rport, 'sip':lip, 'sport':lport }
+    local= { 'table':'INPUT',  'proto':proto, 'dip':lip, 'dport':lport, 'sip':rip, 'sport':rport }
     return local, remote
 
 def main(stdscr):
@@ -59,14 +59,12 @@ def main(stdscr):
     lastNumDelays = 0 
     delay=list()
     while True:
-        sleep(0.0001)
-        cc.calculate_delays()
-        numDelays = len(cc.delays)
-        if numDelays == lastNumDelays:
+        sleep(0.00001)
+        if cc.calculate_delays() == 0:
             continue
         stdscr.clear()
         y, x = stdscr.getmaxyx()
-        lines=min(y,numDelays) 
+        lines=y #min(y,len(delay))
         stats=list(cc.delays)[-lines:]
 
         while (len(delay)):
@@ -84,7 +82,6 @@ def main(stdscr):
             percent = 100.0 * (datum[2] - mindelay) / (maxdelay - mindelay)
             stdscr.addstr(' %:' + ("%3.2f" % percent) + '\n')
         stdscr.refresh()
-        lastNumDelays=numDelays
 
 if __name__ == '__main__':
     try:

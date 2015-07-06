@@ -19,6 +19,7 @@ class CovertChannel():
     def induce_jitter(self):
         """This function modulates a signal by delaying or not delaying outbound 
         packets."""
+        #sleep(1.0)
         pass
 
     def calculate_delays(self):
@@ -27,8 +28,11 @@ class CovertChannel():
             if self.lastPacketTime == None:
                 self.lastPacketTime = self.packetTimes.popleft()[1]
 
+        count=0
         while len(self.packetTimes) > 1:
+            count=count+1
             thisPacket = self.packetTimes.popleft() 
             self.delays.append( [ thisPacket[0], thisPacket[1], thisPacket[1] - self.lastPacketTime ] )
             self.lastPacketTime = thisPacket[1]
+        return count
         

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from netfilterqueue import NetfilterQueue, COPY_META
 import threading
+from time import sleep
 import subprocess
 from atexit import register
 
@@ -9,7 +10,7 @@ globalconnspecnum=0
 class NetfilterQueueWrapper(NetfilterQueue):
     """NetfilterQueueWrapper is an object used to set up and tear down NFQUEUE iptables rules."""
 
-    def __init__(self, table='INPUT', ip='127.0.0.1', proto='tcp', port='6667', callback=None):
+    def __init__(self, table='INPUT', proto='tcp', dip='127.0.0.1', dport='6667', sip='127.0.0.1', sport='6668', callback=None):
         super(NetfilterQueueWrapper,self).__init__()
         global globalconnspecnum
         self.connspec=''
@@ -18,14 +19,18 @@ class NetfilterQueueWrapper(NetfilterQueue):
         self.callback=callback
 
         # create the rule specification
-        self.connspec = table + ' -d ' + ip + '/32 -p ' + proto + ' --dport ' + port 
+        self.connspec = table + ' -p ' + proto
+        self.connspec = self.connspec + ' -d ' + dip + '/32 --dport ' + dport 
+        self.connspec = self.connspec + ' -s ' + sip + '/32 --sport ' + sport
         self.connspec = self.connspec + ' -j NFQUEUE --queue-num ' + str(self.connspecnum)
 
         # run the appropriate iptables command and make sure it finishes
         cmd = 'iptables -I ' + self.connspec
+        #print cmd
+        #sleep(10)
         p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         retval=p.wait()
-
+        #print str(retval) + ' '
         # associate the NFQUEUE number with the wrapper function 
         self.bind(self.connspecnum, self.wrapper_func, mode=COPY_META)
 
